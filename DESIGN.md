@@ -31,13 +31,7 @@ A lean, opinionated totem manager for World of Warcraft Classic Era Shamans. Com
 
 ## Ideas / next
 
-In rough order of value-to-effort. None implemented yet.
-
-1. **Lightning Shield charge count overlay.** Show 1–9 on the shield button so Enhancement shamans can see when the buff is about to drop. `UnitBuff` already returns `count`; just a small FontString on top of the swirl. Sets the precedent for "in-combat state overlays beyond timers" — fine, but worth being deliberate about.
-2. **Totemic Call recall button.** Small button at the end of the bar that recalls all active totems for the 25% mana refund. One click, no combat caveats.
-3. **Standard action-button dimming.** Red tint when the assigned spell is out of range; faded when out of mana. Currently buttons always look "ready" regardless of cast state.
-4. **Per-character totem ordering.** Flyout order saved per character instead of account-wide. Matters when a tank-spec alt and a DPS-spec main want different priorities for the same element.
-5. **Bar scale via slash command.** `/ht scale 0.8` to resize. Size is fixed at 36px today.
+1. **Standard action-button dimming.** Red tint when the assigned spell is out of range; faded when out of mana. Currently buttons always look "ready" regardless of cast state.
 
 ---
 
