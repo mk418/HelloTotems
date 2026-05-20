@@ -309,7 +309,7 @@ function Bar:Init()
         f:ClearAllPoints()
         f:SetPoint(pos.point, UIParent, pos.relPoint, pos.x, pos.y)
     else
-        f:SetPoint("CENTER", UIParent, "CENTER", 0, -200)
+        f:SetPoint("CENTER", UIParent, "CENTER", 0, -230)
     end
 
     self.frame = f
@@ -321,6 +321,7 @@ function Bar:Init()
     end
 
     self:Refresh()
+    self:ApplyScale()
 
     ns:On("SPELL_UPDATE_COOLDOWN", function()
         for i = 1, NUM_SLOTS do updateMainCooldown(Bar.slots[i]) end
@@ -381,4 +382,13 @@ end
 
 function Bar:SetLocked(locked)
     HelloTotemsDB.barLocked = locked and true or false
+end
+
+-- SetScale on a frame with protected children is combat-restricted, so
+-- this no-ops in lockdown — callers (slash, slider) are themselves
+-- gated out-of-combat.
+function Bar:ApplyScale()
+    if InCombatLockdown() then return end
+    if not self.frame then return end
+    self.frame:SetScale(HelloTotemsDB.scale or 1.0)
 end

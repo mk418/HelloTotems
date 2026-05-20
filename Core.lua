@@ -54,7 +54,8 @@ ns:On("PLAYER_LOGIN", function()
     if class ~= "SHAMAN" then return end
     ns.enabled = true
     ns.TotemBar:Init()
-    print("|cff80ff80HelloTotems|r loaded — left-click casts, right-click or chevron opens the picker")
+    ns.Config:CreatePanel()
+    print("|cff80ff80HelloTotems|r loaded - left-click casts, right-click or chevron opens the picker")
 end)
 
 SLASH_HELLOTOTEMS1 = "/ht"
@@ -72,8 +73,25 @@ SlashCmdList["HELLOTOTEMS"] = function(msg)
     elseif msg == "unlock" then
         if not ns.enabled then return end
         ns.TotemBar:SetLocked(false)
-        print("|cff80ff80HelloTotems|r frames unlocked — drag to move")
+        print("|cff80ff80HelloTotems|r frames unlocked - drag to move")
+    elseif msg == "config" then
+        if not ns.enabled then return end
+        ns.Config:OpenPanel()
+    elseif msg:match("^scale ") then
+        if not ns.enabled then return end
+        if InCombatLockdown() then
+            print("|cff80ff80HelloTotems|r can't change scale in combat")
+            return
+        end
+        local v = tonumber(msg:match("^scale%s+([%d.]+)$"))
+        if not v or v < 0.5 or v > 2.0 then
+            print("|cff80ff80HelloTotems|r usage: /ht scale <0.5-2.0>")
+            return
+        end
+        HelloTotemsDB.scale = v
+        ns.TotemBar:ApplyScale()
+        print(("|cff80ff80HelloTotems|r scale set to %.2f"):format(v))
     else
-        print("|cff80ff80HelloTotems|r commands: /ht lock | /ht unlock | /ht reset")
+        print("|cff80ff80HelloTotems|r commands: /ht lock | /ht unlock | /ht config | /ht scale <v> | /ht reset")
     end
 end
