@@ -77,19 +77,24 @@ local function updateMainCooldown(btn)
         end
     elseif slot == 6 and btn.spellName then
         -- UnitBuff in Classic Era takes an index, not a name. Walk the
-        -- player's buffs and match by spell name.
-        local duration, expirationTime
+        -- player's buffs and match by spell name; also pick up the
+        -- stack count for the charge overlay.
+        if btn.charges then btn.charges:SetText("") end
+        local duration, expirationTime, count
         for i = 1, 40 do
-            local name, _, _, _, dur, exp = UnitBuff("player", i)
+            local name, _, cnt, _, dur, exp = UnitBuff("player", i)
             if not name then break end
             if name == btn.spellName then
-                duration, expirationTime = dur, exp
+                duration, expirationTime, count = dur, exp, cnt
                 break
             end
         end
         if duration and duration > 0 and expirationTime then
             btn.cooldown:SetReverse(true)
             btn.cooldown:SetCooldown(expirationTime - duration, duration)
+            if btn.charges and count and count > 0 then
+                btn.charges:SetText(count)
+            end
             return
         end
     end
@@ -215,6 +220,15 @@ local function newMainButton(parent, slot)
     local cd = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
     cd:SetAllPoints()
     btn.cooldown = cd
+
+    -- Charge count overlay for slots that track a stack-based buff
+    -- (currently only Lightning Shield). Parented to the cooldown frame
+    -- so it renders above the swirl. Populated by updateMainCooldown.
+    if slot == 6 then
+        local charges = cd:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+        charges:SetPoint("TOPRIGHT", btn, "TOPRIGHT", -3, -2)
+        btn.charges = charges
+    end
 
     btn:SetScript("OnEnter", showTooltip)
     btn:SetScript("OnLeave", GameTooltip_Hide)
