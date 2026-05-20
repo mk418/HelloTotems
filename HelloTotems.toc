@@ -1,0 +1,10 @@
+## Interface: 11508
+## Title: HelloTotems
+## Notes: Lean, opinionated totem manager for Shaman
+## Author: Drikk
+## Version: 0.1.0
+## SavedVariables: HelloTotemsDB
+## SavedVariablesPerCharacter: HelloTotemsCharDB
+
+Core.lua
+Config.lua
