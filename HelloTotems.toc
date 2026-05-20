@@ -5,6 +5,7 @@
 ## Version: 0.1.0
 ## SavedVariables: HelloTotemsDB
 ## SavedVariablesPerCharacter: HelloTotemsCharDB
+## X-Curse-Project-ID: 1548993
 
 Core.lua
 Config.lua
