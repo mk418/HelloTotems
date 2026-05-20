@@ -12,6 +12,31 @@ local NUM_SLOTS = 6
 local NORMAL_TEXTURE_SIZE = 64
 local NORMAL_TEXTURE_Y_OFFSET = -1
 
+-- Flyout open/close has to run from a secure execution context to work
+-- in combat (Show/Hide on a frame with SecureActionButton children is
+-- protected). The chev is a plain Button with SecureHandlerClickTemplate
+-- — _onclick on it runs in the restricted env and toggles the flyout.
+--
+-- Right-click on the main button gets routed through the same snippet
+-- via SecureActionButton's type2="click"/clickbutton2 mechanism: when
+-- the user right-clicks, the secure cast handler calls chev:Click(),
+-- which fires the chev's _onclick. No insecure wrappers in this path,
+-- so it stays combat-safe.
+local CHEV_ONCLICK_SNIPPET = ([[
+    if self:GetAttribute("empty") then return end
+    local me = self:GetFrameRef("myflyout")
+    if not me then return end
+    if me:IsShown() then
+        me:Hide()
+    else
+        for i = 1, %d do
+            local f = self:GetFrameRef("flyout"..i)
+            if f and f ~= me and f:IsShown() then f:Hide() end
+        end
+        me:Show()
+    end
+]]):format(NUM_SLOTS)
+
 local function styleIconButton(btn)
     local icon = btn:CreateTexture(nil, "BACKGROUND")
     icon:SetAllPoints()
@@ -134,6 +159,10 @@ local function showTooltip(self)
 end
 
 local function closeAllFlyouts(except)
+    -- Insecure path used by the main button's PostClick on left-click —
+    -- bail in combat (Hide on a flyout is protected; the chev's secure
+    -- snippet handles closing during combat).
+    if InCombatLockdown() then return end
     for i = 1, NUM_SLOTS do
         local m = Bar.slots[i]
         if m and m.flyout and m ~= except then m.flyout:Hide() end
@@ -143,10 +172,9 @@ end
 local function newFlyoutEntry(parent, mainBtn)
     -- Pure SecureActionButton: clicking fires the cast via the same
     -- secure path the main button uses. The "reassign the main button"
-    -- side-effect lives in PostClick — applied immediately out of combat,
-    -- and deferred to PLAYER_REGEN_ENABLED in combat (SetAttribute on a
-    -- protected frame isn't allowed mid-combat from insecure code, and
-    -- every restricted-env workaround I tried also broke the cast).
+    -- side-effect lives in PostClick (insecure), gated on combat — in
+    -- combat the cast still goes through, just the flyout doesn't auto-
+    -- close and the main button's spell1 stays on its previous spell.
     local btn = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
     btn:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     styleIconButton(btn)
@@ -155,19 +183,19 @@ local function newFlyoutEntry(parent, mainBtn)
     -- spell1 attribute is populated per-entry by setEntrySpell.
 
     btn:SetScript("PostClick", function(self)
-        -- Non-protected updates: safe in or out of combat.
         HelloTotemsDB.slotAssignment = HelloTotemsDB.slotAssignment or {}
         HelloTotemsDB.slotAssignment[mainBtn.slot] = self.spellName
         mainBtn.spellName = self.spellName
         mainBtn.spellID = self.spellID
         mainBtn.icon:SetTexture(self.icon:GetTexture() or "")
+        mainBtn.icon:SetDesaturated(false)
+        mainBtn.icon:SetVertexColor(1, 1, 1, 1)
+        applyUsable(mainBtn)
         updateMainCooldown(mainBtn)
-        mainBtn.flyout:Hide()
-        -- Protected attribute: write now if we can, otherwise let
-        -- Bar:Refresh re-apply from saved vars when combat ends.
         if InCombatLockdown() then
             Bar.needsRefresh = true
         else
+            mainBtn.flyout:Hide()
             mainBtn:SetAttribute("spell1", self.spellName)
         end
     end)
@@ -194,12 +222,16 @@ local function populateFlyout(mainBtn, knownList)
     if #knownList == 0 then
         f:SetSize(BUTTON_SIZE, BUTTON_SIZE)
         mainBtn.empty = true
-        if mainBtn.chev then mainBtn.chev:Hide() end
+        if mainBtn.chev then
+            mainBtn.chev:SetAttribute("empty", true)
+            mainBtn.chev:Hide()
+        end
         return
     end
     mainBtn.empty = false
-    -- No need for a picker when there's only one choice.
     if mainBtn.chev then
+        mainBtn.chev:SetAttribute("empty", nil)
+        -- No need for a picker when there's only one choice.
         if #knownList == 1 then mainBtn.chev:Hide() else mainBtn.chev:Show() end
     end
     for i, name in ipairs(knownList) do
@@ -223,10 +255,13 @@ local function newMainButton(parent, slot)
         "SecureActionButtonTemplate")
     btn:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    -- type1 only: left-click casts via the secure code path. Right-click
-    -- has no secure type, so the insecure OnClick hook below is free to
-    -- repurpose it for opening the flyout.
+    -- type1=spell casts on left-click; type2=click routes right-click
+    -- through the secure cast handler to the chev (clickbutton2, wired
+    -- up below), whose _onclick snippet toggles the flyout. This keeps
+    -- the whole right-click path in secure-handler land so it works in
+    -- combat.
     btn:SetAttribute("type1", "spell")
+    btn:SetAttribute("type2", "click")
     btn.slot = slot
 
     styleIconButton(btn)
@@ -246,21 +281,17 @@ local function newMainButton(parent, slot)
 
     btn:SetScript("OnEnter", showTooltip)
     btn:SetScript("OnLeave", GameTooltip_Hide)
-    btn:HookScript("OnClick", function(self, button)
-        if button == "RightButton" then
-            if self.empty then return end
-            if self.flyout:IsShown() then
-                self.flyout:Hide()
-            else
-                closeAllFlyouts(self)
-                self.flyout:Show()
-            end
-        else
-            closeAllFlyouts()
-        end
+    btn:SetScript("PostClick", function(self, button)
+        -- Close other flyouts after a cast. Insecure (PostClick runs in
+        -- normal Lua), so combat-guarded — the chev's secure snippet
+        -- already hides siblings when opening, which covers combat.
+        if button == "LeftButton" then closeAllFlyouts() end
     end)
 
-    local f = CreateFrame("Frame", nil, btn)
+    -- SecureHandlerBaseTemplate marks the flyout as a secure frame so the
+    -- chev's _onclick snippet can call Show/Hide on it in combat (a plain
+    -- Frame's visibility methods aren't exposed to the restricted env).
+    local f = CreateFrame("Frame", nil, btn, "SecureHandlerBaseTemplate")
     f:SetFrameStrata("DIALOG")
     f:SetClampedToScreen(true)
     f:Hide()
@@ -274,8 +305,10 @@ local function newMainButton(parent, slot)
     -- Arrow sits just above the button to signal that the flyout opens
     -- upward from here. ChatFrameExpandArrow points down by default;
     -- TexCoord flip turns it into an upward arrow.
-    local chev = CreateFrame("Button", nil, btn)
+    local chev = CreateFrame("Button", "HelloTotemsSlot" .. slot .. "Chev",
+        btn, "SecureHandlerClickTemplate")
     btn.chev = chev
+    btn:SetAttribute("clickbutton2", chev)
     chev:SetSize(12, 12)
     chev:SetPoint("BOTTOM", btn, "TOP", 0, 0)
     chev:SetFrameLevel(btn:GetFrameLevel() + 10)
@@ -287,15 +320,8 @@ local function newMainButton(parent, slot)
     chevTex:SetVertexColor(1, 1, 1, 0.9)
 
     chev:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
-    chev:SetScript("OnClick", function()
-        if btn.empty then return end
-        if btn.flyout:IsShown() then
-            btn.flyout:Hide()
-        else
-            closeAllFlyouts(btn)
-            btn.flyout:Show()
-        end
-    end)
+    -- OnClick is the secure _onclick snippet wired up in Bar:Init
+    -- (toggles this slot's flyout, hides siblings) — runs in combat.
 
     return btn
 end
@@ -327,11 +353,26 @@ function Bar:Init()
     end
 
     self.frame = f
+
     self.slots = {}
     for i = 1, NUM_SLOTS do
         local m = newMainButton(f, i)
         m:SetPoint("LEFT", f, "LEFT", (i - 1) * (BUTTON_SIZE + SLOT_SPACING), 0)
         self.slots[i] = m
+    end
+
+    -- Each chev gets refs to its own flyout (toggle target) and to every
+    -- flyout (so opening one closes the others), then the secure _onclick
+    -- snippet that does the toggle in the restricted env. The main button
+    -- routes right-click to the chev via type2="click", so both the chev
+    -- click path and the main-button right-click share this same snippet.
+    for i = 1, NUM_SLOTS do
+        local m = self.slots[i]
+        m.chev:SetFrameRef("myflyout", m.flyout)
+        for j = 1, NUM_SLOTS do
+            m.chev:SetFrameRef("flyout" .. j, self.slots[j].flyout)
+        end
+        m.chev:SetAttribute("_onclick", CHEV_ONCLICK_SNIPPET)
     end
 
     self:Refresh()
