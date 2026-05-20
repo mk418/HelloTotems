@@ -41,7 +41,8 @@ ns:On("PLAYER_LOGIN", function()
     ns.playerClass = class
     if class ~= "SHAMAN" then return end
     ns.enabled = true
-    print("|cff80ff80HelloTotems|r loaded")
+    ns.TotemBar:Init()
+    print("|cff80ff80HelloTotems|r loaded — left-click casts, right-click or chevron opens the picker")
 end)
 
 SLASH_HELLOTOTEMS1 = "/ht"
@@ -52,7 +53,15 @@ SlashCmdList["HELLOTOTEMS"] = function(msg)
         HelloTotemsDB = nil
         HelloTotemsCharDB = nil
         ReloadUI()
+    elseif msg == "lock" then
+        if not ns.enabled then return end
+        ns.TotemBar:SetLocked(true)
+        print("|cff80ff80HelloTotems|r frames locked")
+    elseif msg == "unlock" then
+        if not ns.enabled then return end
+        ns.TotemBar:SetLocked(false)
+        print("|cff80ff80HelloTotems|r frames unlocked — drag to move")
     else
-        print("|cff80ff80HelloTotems|r commands: /ht reset")
+        print("|cff80ff80HelloTotems|r commands: /ht lock | /ht unlock | /ht reset")
     end
 end

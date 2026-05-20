@@ -3,7 +3,9 @@ local ADDON_NAME, ns = ...
 ns.Config = {}
 local Config = ns.Config
 
-local accountDefaults = {}
+local accountDefaults = {
+    barLocked = false,
+}
 
 local charDefaults = {}
 
