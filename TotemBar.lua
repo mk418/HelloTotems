@@ -37,6 +37,27 @@ local CHEV_ONCLICK_SNIPPET = ([[
     end
 ]]):format(NUM_SLOTS)
 
+-- Each flyout entry is a SecureHandlerClick (not a SecureActionButton).
+-- Its _onclick snippet sets spell1 on a shared hidden cast button and
+-- fires its click to do the actual cast, then reassigns the main button
+-- and hides the flyout. Doing all four through the secure env means the
+-- whole chain — cast + reassign + close — works in combat.
+local ENTRY_ONCLICK_SNIPPET = [[
+    local spell = self:GetAttribute("spell")
+    if not spell then return end
+    local helper = self:GetFrameRef("castHelper")
+    if helper then
+        helper:SetAttribute("spell1", spell)
+        helper:Click()
+    end
+    local main = self:GetFrameRef("main")
+    if main then
+        main:SetAttribute("spell1", spell)
+    end
+    local me = self:GetFrameRef("myflyout")
+    if me then me:Hide() end
+]]
+
 local function styleIconButton(btn)
     local icon = btn:CreateTexture(nil, "BACKGROUND")
     icon:SetAllPoints()
@@ -170,17 +191,21 @@ local function closeAllFlyouts(except)
 end
 
 local function newFlyoutEntry(parent, mainBtn)
-    -- Pure SecureActionButton: clicking fires the cast via the same
-    -- secure path the main button uses. The "reassign the main button"
-    -- side-effect lives in PostClick (insecure), gated on combat — in
-    -- combat the cast still goes through, just the flyout doesn't auto-
-    -- close and the main button's spell1 stays on its previous spell.
-    local btn = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
+    -- SecureHandlerClick (not SecureActionButton): clicking runs the
+    -- _onclick snippet, which fires Bar.castHelper to do the cast,
+    -- reassigns the main button's spell1, and hides the flyout — all
+    -- in the secure env so the whole chain works in combat. PostClick
+    -- handles non-protected visual / DB updates.
+    local btn = CreateFrame("Button", nil, parent, "SecureHandlerClickTemplate")
     btn:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     styleIconButton(btn)
     btn:RegisterForClicks("LeftButtonUp")
-    btn:SetAttribute("type1", "spell")
-    -- spell1 attribute is populated per-entry by setEntrySpell.
+
+    btn:SetFrameRef("castHelper", Bar.castHelper)
+    btn:SetFrameRef("main", mainBtn)
+    btn:SetFrameRef("myflyout", mainBtn.flyout)
+    btn:SetAttribute("_onclick", ENTRY_ONCLICK_SNIPPET)
+    -- "spell" attribute is populated per-entry by setEntrySpell.
 
     btn:SetScript("PostClick", function(self)
         HelloTotemsDB.slotAssignment = HelloTotemsDB.slotAssignment or {}
@@ -192,12 +217,6 @@ local function newFlyoutEntry(parent, mainBtn)
         mainBtn.icon:SetVertexColor(1, 1, 1, 1)
         applyUsable(mainBtn)
         updateMainCooldown(mainBtn)
-        if InCombatLockdown() then
-            Bar.needsRefresh = true
-        else
-            mainBtn.flyout:Hide()
-            mainBtn:SetAttribute("spell1", self.spellName)
-        end
     end)
 
     btn:SetScript("OnEnter", showTooltip)
@@ -210,7 +229,7 @@ local function setEntrySpell(entry, spellName)
     local _, _, icon, _, _, _, spellID = GetSpellInfo(spellName)
     entry.spellID = spellID
     entry.icon:SetTexture(icon or "")
-    entry:SetAttribute("spell1", spellName)
+    entry:SetAttribute("spell", spellName)
 end
 
 local function populateFlyout(mainBtn, knownList)
@@ -353,6 +372,16 @@ function Bar:Init()
     end
 
     self.frame = f
+
+    -- Shared hidden SecureActionButton that flyout-entry snippets click
+    -- to fire a cast in the secure env. The entry snippet sets spell1 on
+    -- this helper just before Click() — one helper for all entries since
+    -- only one entry click happens at a time.
+    local castHelper = CreateFrame("Button", "HelloTotemsCastHelper",
+        UIParent, "SecureActionButtonTemplate")
+    castHelper:Hide()
+    castHelper:SetAttribute("type1", "spell")
+    self.castHelper = castHelper
 
     self.slots = {}
     for i = 1, NUM_SLOTS do
