@@ -10,3 +10,4 @@ Core.lua
 Config.lua
 Totems.lua
 TotemBar.lua
+Bindings.xml

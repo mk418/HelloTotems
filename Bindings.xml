@@ -1,0 +1,8 @@
+<Bindings>
+    <Binding name="CLICK HelloTotemsSlot1:LeftButton" header="HELLOTOTEMS" category="HelloTotems"/>
+    <Binding name="CLICK HelloTotemsSlot2:LeftButton" header="HELLOTOTEMS" category="HelloTotems"/>
+    <Binding name="CLICK HelloTotemsSlot3:LeftButton" header="HELLOTOTEMS" category="HelloTotems"/>
+    <Binding name="CLICK HelloTotemsSlot4:LeftButton" header="HELLOTOTEMS" category="HelloTotems"/>
+    <Binding name="CLICK HelloTotemsSlot5:LeftButton" header="HELLOTOTEMS" category="HelloTotems"/>
+    <Binding name="CLICK HelloTotemsSlot6:LeftButton" header="HELLOTOTEMS" category="HelloTotems"/>
+</Bindings>

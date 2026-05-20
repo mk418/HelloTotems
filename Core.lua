@@ -1,6 +1,18 @@
 local ADDON_NAME, ns = ...
 ns.ADDON_NAME = ADDON_NAME
 
+-- Display names for the key bindings registered in Bindings.xml.
+-- Bindings use the engine's "CLICK <Button>:<Button>" form so the
+-- keypress dispatches a true hardware click on the secure button —
+-- required for CastSpellByName not to trip ADDON_ACTION_FORBIDDEN.
+_G.BINDING_HEADER_HELLOTOTEMS = "HelloTotems"
+_G["BINDING_NAME_CLICK HelloTotemsSlot1:LeftButton"] = "Cast slot 1 (Fire)"
+_G["BINDING_NAME_CLICK HelloTotemsSlot2:LeftButton"] = "Cast slot 2 (Earth)"
+_G["BINDING_NAME_CLICK HelloTotemsSlot3:LeftButton"] = "Cast slot 3 (Water)"
+_G["BINDING_NAME_CLICK HelloTotemsSlot4:LeftButton"] = "Cast slot 4 (Air)"
+_G["BINDING_NAME_CLICK HelloTotemsSlot5:LeftButton"] = "Cast slot 5 (Weapon)"
+_G["BINDING_NAME_CLICK HelloTotemsSlot6:LeftButton"] = "Cast slot 6 (Shield)"
+
 ns.eventFrame = CreateFrame("Frame")
 ns.eventHandlers = {}
 
