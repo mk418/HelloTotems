@@ -29,12 +29,6 @@ A lean, opinionated totem manager for World of Warcraft Classic Era Shamans. Com
 
 ---
 
-## Ideas / next
-
-1. **Standard action-button dimming.** Red tint when the assigned spell is out of range; faded when out of mana. Currently buttons always look "ready" regardless of cast state.
-
----
-
 ## File structure
 
 ```
