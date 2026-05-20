@@ -31,6 +31,19 @@ local function styleIconButton(btn)
     btn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 end
 
+-- Blue-tint the icon when the assigned spell can't be cast for lack
+-- of mana. Empty / placeholder slots are left alone (applySpell owns
+-- their vertex color).
+local function applyUsable(btn)
+    if not btn.spellName then return end
+    local _, noMana = IsUsableSpell(btn.spellName)
+    if noMana then
+        btn.icon:SetVertexColor(0.5, 0.5, 1.0, 1)
+    else
+        btn.icon:SetVertexColor(1, 1, 1, 1)
+    end
+end
+
 local function applySpell(btn, spellName)
     btn.spellName = spellName
     if not spellName then
@@ -52,6 +65,7 @@ local function applySpell(btn, spellName)
     btn.icon:SetDesaturated(false)
     btn.icon:SetVertexColor(1, 1, 1, 1)
     btn:SetAttribute("spell1", spellName)
+    applyUsable(btn)
 end
 
 local function updateMainCooldown(btn)
@@ -325,6 +339,11 @@ function Bar:Init()
 
     ns:On("SPELL_UPDATE_COOLDOWN", function()
         for i = 1, NUM_SLOTS do updateMainCooldown(Bar.slots[i]) end
+    end)
+    ns:On("SPELL_UPDATE_USABLE", function()
+        for i = 1, NUM_SLOTS do
+            if Bar.slots[i] then applyUsable(Bar.slots[i]) end
+        end
     end)
     ns:On("PLAYER_TOTEM_UPDATE", function()
         for i = 1, NUM_SLOTS do updateMainCooldown(Bar.slots[i]) end
