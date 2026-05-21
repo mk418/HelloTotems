@@ -37,24 +37,6 @@ local CHEV_ONCLICK_SNIPPET = ([[
     end
 ]]):format(NUM_SLOTS)
 
--- Flyout entries are SecureActionButtons that cast on click (type1=spell).
--- SecureHandlerWrapScript attaches a post-body that runs after the cast
--- in the secure env, with the chev as the header — it reassigns the
--- main button's spell1 and hides the flyout. Both ops are SetAttribute /
--- Hide on frame refs, which the restricted env does allow; Click() is
--- not exposed, which is why we keep the SecureActionButton for the cast
--- itself rather than trying to fire one from a snippet.
-local ENTRY_POST_SNIPPET = [[
-    local spell = self:GetAttribute("spell1")
-    if not spell then return end
-    local main = control:GetFrameRef("main")
-    if main then
-        main:SetAttribute("spell1", spell)
-    end
-    local me = control:GetFrameRef("myflyout")
-    if me then me:Hide() end
-]]
-
 local function styleIconButton(btn)
     local icon = btn:CreateTexture(nil, "BACKGROUND")
     icon:SetAllPoints()
@@ -189,19 +171,17 @@ end
 
 local function newFlyoutEntry(parent, mainBtn)
     -- SecureActionButton fires the cast on click via type1=spell. The
-    -- WrapScript post body (header = the slot's chev, which already
-    -- carries the main + myflyout refs) reassigns the main button's
-    -- spell1 and hides the flyout — both in the secure env so the
-    -- whole chain works in combat. PostClick handles non-protected
-    -- visual / DB updates.
+    -- post-cast side effects (hide the flyout, reassign the main button's
+    -- spell1) live in PostClick — insecure, so combat-guarded. In combat
+    -- the cast still fires; the flyout stays open and the main button
+    -- doesn't reassign until combat ends, where Bar.needsRefresh triggers
+    -- a Bar:Refresh that reapplies the assignment from the DB.
     local btn = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
     btn:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     styleIconButton(btn)
     btn:RegisterForClicks("LeftButtonUp")
     btn:SetAttribute("type1", "spell")
     -- spell1 attribute is populated per-entry by setEntrySpell.
-
-    SecureHandlerWrapScript(btn, "OnClick", mainBtn.chev, "", ENTRY_POST_SNIPPET)
 
     btn:SetScript("PostClick", function(self)
         HelloTotemsDB.slotAssignment = HelloTotemsDB.slotAssignment or {}
@@ -213,6 +193,12 @@ local function newFlyoutEntry(parent, mainBtn)
         mainBtn.icon:SetVertexColor(1, 1, 1, 1)
         applyUsable(mainBtn)
         updateMainCooldown(mainBtn)
+        if InCombatLockdown() then
+            Bar.needsRefresh = true
+        else
+            mainBtn.flyout:Hide()
+            mainBtn:SetAttribute("spell1", self.spellName)
+        end
     end)
 
     btn:SetScript("OnEnter", showTooltip)
@@ -376,16 +362,14 @@ function Bar:Init()
         self.slots[i] = m
     end
 
-    -- The chev acts as the secure-handler header for two things: its own
-    -- _onclick snippet (toggle this slot's flyout, hide siblings), and
-    -- the wrap-script post body attached to every flyout entry (reassign
-    -- main, hide flyout after cast). So it carries refs to its own flyout
-    -- and all sibling flyouts (for the toggle), plus its main button (for
-    -- the entry's reassign).
+    -- Each chev gets refs to its own flyout (toggle target) and to every
+    -- flyout (so opening one closes the others), then the secure _onclick
+    -- snippet that does the toggle in the restricted env. The main button
+    -- routes right-click to the chev via type2="click", so both the chev
+    -- click path and the main-button right-click share this same snippet.
     for i = 1, NUM_SLOTS do
         local m = self.slots[i]
         m.chev:SetFrameRef("myflyout", m.flyout)
-        m.chev:SetFrameRef("main", m)
         for j = 1, NUM_SLOTS do
             m.chev:SetFrameRef("flyout" .. j, self.slots[j].flyout)
         end
