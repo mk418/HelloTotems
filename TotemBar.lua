@@ -37,6 +37,26 @@ local CHEV_ONCLICK_SNIPPET = ([[
     end
 ]]):format(NUM_SLOTS)
 
+-- Each flyout entry is a SecureActionButton with type1="macro". Its
+-- macrotext1 (set per-entry by setEntrySpell) is two lines:
+--   /cast SpellName
+--   /click HelloTotemsSlot<N>Entry<I>Post
+-- Both run inside SecureActionButton's secure macro execution, so the
+-- /click on the per-entry post-handler also runs in secure context. The
+-- post-handler is a SecureHandlerClickTemplate whose _onclick snippet
+-- reassigns main's spell1 and hides the flyout — protected ops that the
+-- restricted env permits on frame refs. This makes the whole chain —
+-- cast + reassign + close — work in combat.
+local ENTRY_POST_SNIPPET = [[
+    local spell = self:GetAttribute("spell")
+    if spell then
+        local main = self:GetFrameRef("main")
+        if main then main:SetAttribute("spell1", spell) end
+    end
+    local me = self:GetFrameRef("myflyout")
+    if me then me:Hide() end
+]]
+
 local function styleIconButton(btn)
     local icon = btn:CreateTexture(nil, "BACKGROUND")
     icon:SetAllPoints()
@@ -169,19 +189,30 @@ local function closeAllFlyouts(except)
     end
 end
 
-local function newFlyoutEntry(parent, mainBtn)
-    -- SecureActionButton fires the cast on click via type1=spell. The
-    -- post-cast side effects (hide the flyout, reassign the main button's
-    -- spell1) live in PostClick — insecure, so combat-guarded. In combat
-    -- the cast still fires; the flyout stays open and the main button
-    -- doesn't reassign until combat ends, where Bar.needsRefresh triggers
-    -- a Bar:Refresh that reapplies the assignment from the DB.
+local function newFlyoutEntry(parent, mainBtn, idx)
+    -- type1="macro" on the entry: its macrotext casts and then /clicks
+    -- the per-entry post-handler, all inside SecureActionButton's secure
+    -- macro execution. macrotext1 is filled in by setEntrySpell since it
+    -- needs the actual spell name. PostClick still handles non-protected
+    -- DB + visual updates (icon swap, cooldown sync).
     local btn = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
     btn:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     styleIconButton(btn)
     btn:RegisterForClicks("LeftButtonUp")
-    btn:SetAttribute("type1", "spell")
-    -- spell1 attribute is populated per-entry by setEntrySpell.
+    btn:SetAttribute("type1", "macro")
+    -- macrotext1 attribute is populated per-entry by setEntrySpell.
+
+    -- Per-entry post-handler: receives the /click from the entry's
+    -- macro and runs the close + reassign in its _onclick snippet.
+    local postName = "HelloTotemsSlot" .. mainBtn.slot .. "Entry" .. idx .. "Post"
+    local postHandler = CreateFrame("Button", postName, parent,
+        "SecureHandlerClickTemplate")
+    postHandler:Hide()
+    postHandler:SetFrameRef("main", mainBtn)
+    postHandler:SetFrameRef("myflyout", mainBtn.flyout)
+    postHandler:SetAttribute("_onclick", ENTRY_POST_SNIPPET)
+    btn.postHandler = postHandler
+    btn.postName = postName
 
     btn:SetScript("PostClick", function(self)
         HelloTotemsDB.slotAssignment = HelloTotemsDB.slotAssignment or {}
@@ -193,12 +224,6 @@ local function newFlyoutEntry(parent, mainBtn)
         mainBtn.icon:SetVertexColor(1, 1, 1, 1)
         applyUsable(mainBtn)
         updateMainCooldown(mainBtn)
-        if InCombatLockdown() then
-            Bar.needsRefresh = true
-        else
-            mainBtn.flyout:Hide()
-            mainBtn:SetAttribute("spell1", self.spellName)
-        end
     end)
 
     btn:SetScript("OnEnter", showTooltip)
@@ -211,7 +236,9 @@ local function setEntrySpell(entry, spellName)
     local _, _, icon, _, _, _, spellID = GetSpellInfo(spellName)
     entry.spellID = spellID
     entry.icon:SetTexture(icon or "")
-    entry:SetAttribute("spell1", spellName)
+    entry:SetAttribute("macrotext1",
+        "/cast " .. spellName .. "\n/click " .. entry.postName)
+    entry.postHandler:SetAttribute("spell", spellName)
 end
 
 local function populateFlyout(mainBtn, knownList)
@@ -238,7 +265,7 @@ local function populateFlyout(mainBtn, knownList)
     for i, name in ipairs(knownList) do
         local entry = f.entries[i]
         if not entry then
-            entry = newFlyoutEntry(f, mainBtn)
+            entry = newFlyoutEntry(f, mainBtn, i)
             f.entries[i] = entry
         end
         setEntrySpell(entry, name)
