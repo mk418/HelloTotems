@@ -135,17 +135,32 @@ local function updateMainCooldown(btn)
             return
         end
     elseif slot == 6 and btn.spellName then
-        -- UnitBuff in Classic Era takes an index, not a name. Walk the
-        -- player's buffs and match by spell name; also pick up the
-        -- stack count for the charge overlay.
+        -- Walk the player's buffs and match by spell name; also pick up
+        -- the stack count for the charge overlay. Since 1.15.9 UnitBuff
+        -- exists only as a CVar-gated deprecation shim slated for
+        -- removal, so prefer C_UnitAuras (present on 1.15.8 too) and
+        -- keep UnitBuff as the fallback for older clients.
         if btn.charges then btn.charges:SetText("") end
         local duration, expirationTime, count
-        for i = 1, 40 do
-            local name, _, cnt, _, dur, exp = UnitBuff("player", i)
-            if not name then break end
-            if name == btn.spellName then
-                duration, expirationTime, count = dur, exp, cnt
-                break
+        if C_UnitAuras and C_UnitAuras.GetBuffDataByIndex then
+            for i = 1, 40 do
+                local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
+                if not aura then break end
+                if aura.name == btn.spellName then
+                    duration = aura.duration
+                    expirationTime = aura.expirationTime
+                    count = aura.applications
+                    break
+                end
+            end
+        else
+            for i = 1, 40 do
+                local name, _, cnt, _, dur, exp = UnitBuff("player", i)
+                if not name then break end
+                if name == btn.spellName then
+                    duration, expirationTime, count = dur, exp, cnt
+                    break
+                end
             end
         end
         if duration and duration > 0 and expirationTime then
@@ -198,7 +213,11 @@ local function newFlyoutEntry(parent, mainBtn, idx)
     local btn = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
     btn:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     styleIconButton(btn)
-    btn:RegisterForClicks("LeftButtonUp")
+    -- Down + up: addon SecureActionButtons act on the down click when
+    -- ActionButtonUseKeyDown=1 (the default) and on the up click when
+    -- it's 0 — an up-only button never fires its macro under the
+    -- default. See the main-button registration for details.
+    btn:RegisterForClicks("LeftButtonDown", "LeftButtonUp")
     btn:SetAttribute("type1", "macro")
     -- macrotext1 attribute is populated per-entry by setEntrySpell.
 
@@ -282,7 +301,16 @@ local function newMainButton(parent, slot)
     local btn = CreateFrame("Button", "HelloTotemsSlot" .. slot, parent,
         "SecureActionButtonTemplate")
     btn:SetSize(BUTTON_SIZE, BUTTON_SIZE)
-    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    -- Down clicks must be registered too. Addon buttons never receive
+    -- the isKeyPress/isSecureAction args (SecureTemplates.xml reserves
+    -- them for Blizzard's own buttons), so SecureActionButton_OnClick
+    -- treats every click — hardware mouse included — per the
+    -- ActionButtonUseKeyDown CVar: 1 (default) acts on the down click
+    -- only, 0 on the up click only. Registering both covers either
+    -- setting; exactly one of the pair performs the action, so nothing
+    -- double-fires.
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp",
+        "LeftButtonDown", "RightButtonDown")
     -- type1=spell casts on left-click; type2=click routes right-click
     -- through the secure cast handler to the chev (clickbutton2, wired
     -- up below), whose _onclick snippet toggles the flyout. This keeps

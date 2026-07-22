@@ -90,6 +90,11 @@ for slot, list in pairs(T.defaultOrder) do
     end
 end
 
+-- BOOKTYPE_SPELL is defined by the flavor-specific SpellBookFrame (retail
+-- already dropped it for Enum.SpellBookSpellBank); fall back to its literal
+-- value in case a future Era build stops loading that file.
+local BOOKTYPE_SPELL = BOOKTYPE_SPELL or "spell"
+
 local function knownTotemNames()
     local set = {}
     for tab = 1, GetNumSpellTabs() do
