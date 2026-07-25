@@ -2,7 +2,7 @@
 ## Title: HelloTotems
 ## Notes: Lean, opinionated totem manager for Shaman
 ## Author: Drikk
-## Version: 0.2.1
+## Version: 0.2.2
 ## SavedVariables: HelloTotemsDB
 ## SavedVariablesPerCharacter: HelloTotemsCharDB
 ## IconTexture: Interface\AddOns\HelloTotems\Icon.png
