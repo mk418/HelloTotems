@@ -5,6 +5,8 @@
 ## Version: 0.2.1
 ## SavedVariables: HelloTotemsDB
 ## SavedVariablesPerCharacter: HelloTotemsCharDB
+## IconTexture: Interface\AddOns\HelloTotems\Icon.png
+## Category: Action Bars
 ## X-Curse-Project-ID: 1548993
 
 Core.lua

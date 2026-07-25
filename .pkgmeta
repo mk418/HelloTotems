@@ -12,6 +12,10 @@ ignore:
     - .github
     - DESIGN.md
     - README.md
+    # Project image for CurseForge, not something the client needs to download.
+    # Icon.png is deliberately not listed here — the TOC's IconTexture points at
+    # it, so it has to ship.
+    - HelloTotems.png
 
 # Generate a -nolib variant of the zip in case libs ever get embedded.
 enable-nolib-creation: yes
